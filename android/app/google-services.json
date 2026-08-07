@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "19168104922",
+    "project_id": "next-gen-class-ey",
+    "storage_bucket": "next-gen-class-ey.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:19168104922:android:4080ae716502a3e3d870e3",
+        "android_client_info": {
+          "package_name": "ey.cae.rezolv.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDoOmFXXPY45TJSsMfAXKYEoOLj-yyk1E8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

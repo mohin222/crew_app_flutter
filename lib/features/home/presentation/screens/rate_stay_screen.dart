@@ -1,28 +1,48 @@
 import 'package:flutter/material.dart';
+import '../../data/feedback_repository.dart';
 
 class RateStayScreen extends StatefulWidget {
-  const RateStayScreen({super.key});
+  final String? hotelName;
+  final String? bookingId;
+  final String? hotelId;
+  final String? crewId;
+
+  const RateStayScreen({
+    super.key,
+    this.hotelName,
+    this.bookingId,
+    this.hotelId,
+    this.crewId,
+  });
 
   @override
   State<RateStayScreen> createState() => _RateStayScreenState();
 }
 
 class _RateStayScreenState extends State<RateStayScreen> {
+  // These 5 categories exactly match the Feedback API's ratings_by_category fields.
   final Map<String, int> _ratings = {
-    'Staff Behaviour': 4,
-    'Service Quality': 4,
-    'Food': 5,
-    'Room Amenities': 3,
+    'Cleanliness': 0,
+    'Service Quality': 0,
+    'Safety': 0,
+    'Food Quality': 0,
+    'Transport': 0,
   };
 
   final Map<String, IconData> _icons = {
-    'Staff Behaviour': Icons.support_agent_outlined,
-    'Service Quality': Icons.star_outline,
-    'Food': Icons.restaurant_outlined,
-    'Room Amenities': Icons.bed_outlined,
+    'Cleanliness': Icons.cleaning_services_outlined,
+    'Service Quality': Icons.support_agent_outlined,
+    'Safety': Icons.shield_outlined,
+    'Food Quality': Icons.restaurant_outlined,
+    'Transport': Icons.directions_car_outlined,
   };
 
   final TextEditingController _commentsController = TextEditingController();
+  final _feedbackRepository = FeedbackRepository();
+
+  bool _isSubmitting = false;
+  String? _errorMessage;
+  bool _isSafetyIssue = false;
 
   static const Color darkNavy = Color(0xFF072D62);
   static const Color lightNavy = Color(0xFF114995);
@@ -34,6 +54,65 @@ class _RateStayScreenState extends State<RateStayScreen> {
     super.dispose();
   }
 
+  Future<void> _submitFeedback() async {
+    if (widget.bookingId == null || widget.hotelId == null || widget.crewId == null ||
+        widget.bookingId!.isEmpty || widget.hotelId!.isEmpty || widget.crewId!.isEmpty) {
+      setState(() => _errorMessage = 'Missing booking details. Cannot submit feedback.');
+      return;
+    }
+
+    if (_ratings.values.any((v) => v == 0)) {
+      setState(() => _errorMessage = 'Please rate all 5 categories before submitting.');
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+
+    final overall = ((_ratings['Cleanliness']! +
+        _ratings['Service Quality']! +
+        _ratings['Safety']! +
+        _ratings['Food Quality']! +
+        _ratings['Transport']!) /
+        5)
+        .round()
+        .clamp(1, 5);
+
+    final result = await _feedbackRepository.submitFeedback(
+      bookingId: widget.bookingId!,
+      crewId: widget.crewId!,
+      hotelId: widget.hotelId!,
+      ratingOverall: overall,
+      cleanliness: _ratings['Cleanliness']!,
+      serviceQuality: _ratings['Service Quality']!,
+      safety: _ratings['Safety']!,
+      foodQuality: _ratings['Food Quality']!,
+      transport: _ratings['Transport']!,
+      comment: _commentsController.text.trim(),
+      categoryTags: _isSafetyIssue ? const ['SAFETY'] : const [],
+      severity: _isSafetyIssue ? 'CRITICAL' : (overall <= 2 ? 'CONCERN' : 'INFO'),
+    );
+
+    if (!mounted) return;
+
+    setState(() => _isSubmitting = false);
+
+    if (result.success) {
+      Navigator.pop(context, true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_isSafetyIssue
+              ? 'Safety issue reported — will be handled within 12 hours'
+              : 'Feedback submitted successfully'),
+        ),
+      );
+    } else {
+      setState(() => _errorMessage = result.errorMessage);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final topPad = MediaQuery.of(context).padding.top;
@@ -41,7 +120,6 @@ class _RateStayScreenState extends State<RateStayScreen> {
       backgroundColor: const Color(0xFFF2F4F8),
       body: Column(
         children: [
-          // Header
           Container(
             width: double.infinity,
             decoration: const BoxDecoration(
@@ -68,7 +146,6 @@ class _RateStayScreenState extends State<RateStayScreen> {
                 const Text(
                   'Rate your stay',
                   style: TextStyle(
-                    
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
                     color: Colors.white,
@@ -86,7 +163,6 @@ class _RateStayScreenState extends State<RateStayScreen> {
                 children: [
                   const SizedBox(height: 4),
 
-                  // Hotel card
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -101,29 +177,13 @@ class _RateStayScreenState extends State<RateStayScreen> {
                             color: Colors.white, size: 20),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
-                              Text(
-                                'Crowne Plaza, Melbourne',
-                                style: TextStyle(
-                                  
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                'Crowne Plaza Melbourne, 1-5 Spencer St, Docklands VIC 3008, Australia',
-                                style: TextStyle(
-                                  
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
+                          child: Text(
+                            widget.hotelName ?? 'Hotel details unavailable',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ],
@@ -132,11 +192,9 @@ class _RateStayScreenState extends State<RateStayScreen> {
 
                   const SizedBox(height: 20),
 
-                  // How was your experience
                   const Text(
                     'How was your experience?',
                     style: TextStyle(
-                      
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
                       color: darkNavy,
@@ -144,9 +202,8 @@ class _RateStayScreenState extends State<RateStayScreen> {
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'You have already submitted for this stay.',
+                    'Rate all 5 categories below.',
                     style: TextStyle(
-                      
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                       fontStyle: FontStyle.italic,
@@ -155,12 +212,61 @@ class _RateStayScreenState extends State<RateStayScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Rating rows - tap a star to set that rating by hand
                   ..._ratings.entries.map((e) => _ratingRow(e.key, e.value)),
 
                   const SizedBox(height: 6),
 
-                  // Additional Comments
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: _isSafetyIssue ? const Color(0xFFFFEDED) : Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: _isSafetyIssue ? const Color(0xFFC62828) : const Color(0xFFDADADA),
+                        width: _isSafetyIssue ? 1.5 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded,
+                            color: _isSafetyIssue ? const Color(0xFFC62828) : Colors.black45,
+                            size: 22),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'This is a Safety Issue',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: _isSafetyIssue ? const Color(0xFFC62828) : darkNavy,
+                                ),
+                              ),
+                              const Text(
+                                'Marks this as CRITICAL — handled with a 12-hour SLA',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontStyle: FontStyle.italic,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: _isSafetyIssue,
+                          activeColor: const Color(0xFFC62828),
+                          onChanged: (v) => setState(() => _isSafetyIssue = v),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -181,7 +287,6 @@ class _RateStayScreenState extends State<RateStayScreen> {
                         const Text(
                           'Additional Comments',
                           style: TextStyle(
-                            
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
                             color: darkNavy,
@@ -192,15 +297,13 @@ class _RateStayScreenState extends State<RateStayScreen> {
                           controller: _commentsController,
                           maxLines: 4,
                           style: const TextStyle(
-                              
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
                               color: Colors.black87),
                           decoration: const InputDecoration(
                             hintText:
-                            "We'd love to know what made your stay memorable ? or what could have made it even better.",
+                            "We'd love to know what made your stay memorable — or what could have made it even better.",
                             hintStyle: TextStyle(
-                              
                               fontSize: 12,
                               fontWeight: FontWeight.w500,
                               color: Colors.black54,
@@ -215,32 +318,38 @@ class _RateStayScreenState extends State<RateStayScreen> {
                     ),
                   ),
 
+                  if (_errorMessage != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      _errorMessage!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ],
+
                   const SizedBox(height: 24),
 
-                  // Submit button
                   SizedBox(
                     width: double.infinity,
                     height: 49,
                     child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Feedback submitted successfully'),
-                          ),
-                        );
-                      },
+                      onPressed: _isSubmitting ? null : _submitFeedback,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: lightNavy,
+                        backgroundColor: _isSafetyIssue ? const Color(0xFFC62828) : lightNavy,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(15),
                         ),
                       ),
-                      child: const Text(
-                        'Submit Feedback',
-                        style: TextStyle(
-                          
+                      child: _isSubmitting
+                          ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2.5),
+                      )
+                          : Text(
+                        _isSafetyIssue ? 'Report Safety Issue' : 'Submit Feedback',
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
                           color: Colors.white,
@@ -290,15 +399,12 @@ class _RateStayScreenState extends State<RateStayScreen> {
             child: Text(
               label,
               style: const TextStyle(
-                
                 fontSize: 14,
                 fontWeight: FontWeight.w800,
                 color: darkNavy,
               ),
             ),
           ),
-          // Each star is individually tappable, so the rating for this
-          // row is set by hand (1-5) rather than being fixed.
           Row(
             children: List.generate(5, (i) {
               return GestureDetector(

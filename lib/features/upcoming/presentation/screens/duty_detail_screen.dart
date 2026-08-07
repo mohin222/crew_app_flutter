@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../home/data/booking_repository.dart';
 
 class DutyDetailScreen extends StatefulWidget {
   final Map<String, String> duty;
@@ -11,11 +12,17 @@ class DutyDetailScreen extends StatefulWidget {
 class _DutyDetailScreenState extends State<DutyDetailScreen> {
   bool _showCheckInOtp = false;
   bool _showCheckOutOtp = false;
+  bool _isActionLoading = false;
+  String? _actionError;
+  late String _currentStatus;
+
+  final _bookingRepository = BookingRepository();
 
   static const Color darkNavy     = Color(0xFF072D62);
   static const Color gold         = Color(0xFFE2B741);
   static const Color otpBlue      = Color(0xFF0093E9);
   static const Color textDarkGrey = Color(0xFF0A0A0A);
+  static const Color green        = Color(0xFF14AE5C);
 
   final List<String> _hotelImages = [
     'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=300',
@@ -23,6 +30,63 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
     'https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=300',
     'https://images.unsplash.com/photo-1584132967334-10e028bd69f7?w=300',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _currentStatus = widget.duty['status'] ?? '';
+  }
+
+  bool get _canCheckIn =>
+      _currentStatus == 'HOTEL_APPROVED' || _currentStatus == 'PUBLISHED_TO_CREW';
+
+  bool get _canCheckOut => _currentStatus == 'CHECKED_IN';
+
+  Future<void> _handleCheckIn() async {
+    final bookingId = widget.duty['bookingId'];
+    if (bookingId == null || bookingId.isEmpty) return;
+
+    setState(() {
+      _isActionLoading = true;
+      _actionError = null;
+    });
+
+    final result = await _bookingRepository.checkIn(bookingId);
+
+    if (!mounted) return;
+
+    setState(() {
+      _isActionLoading = false;
+      if (result.success && result.booking != null) {
+        _currentStatus = result.booking!.status;
+      } else {
+        _actionError = result.errorMessage;
+      }
+    });
+  }
+
+  Future<void> _handleCheckOut() async {
+    final bookingId = widget.duty['bookingId'];
+    if (bookingId == null || bookingId.isEmpty) return;
+
+    setState(() {
+      _isActionLoading = true;
+      _actionError = null;
+    });
+
+    final result = await _bookingRepository.checkOut(bookingId);
+
+    if (!mounted) return;
+
+    setState(() {
+      _isActionLoading = false;
+      if (result.success && result.booking != null) {
+        _currentStatus = result.booking!.status;
+      } else {
+        _actionError = result.errorMessage;
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,13 +121,15 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
                       color: Colors.white, size: 18),
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  '${d['from']} → ${d['to']}',
-                  style: const TextStyle(
-                    
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
+                Expanded(
+                  child: Text(
+                    '${d['from']} - ${d['to']}',
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ],
@@ -76,7 +142,7 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Airport card
+                  // Airport card - real from/station + real status
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -91,18 +157,17 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                d['from']!,
+                                d['from'] ?? '--',
                                 style: const TextStyle(
-                                  
                                   fontSize: 22,
                                   fontWeight: FontWeight.w800,
                                   color: Colors.white,
                                 ),
                               ),
-                              const Text(
-                                'International',
-                                style: TextStyle(
-                                  
+                              const SizedBox(height: 2),
+                              Text(
+                                d['code'] ?? '',
+                                style: const TextStyle(
                                   fontSize: 13,
                                   fontStyle: FontStyle.italic,
                                   fontWeight: FontWeight.w700,
@@ -119,11 +184,10 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
                             color: gold,
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: const Text(
-                            'Confirmed',
-                            style: TextStyle(
-                              
-                              fontSize: 14,
+                          child: Text(
+                            _currentStatus.isNotEmpty ? _currentStatus : '--',
+                            style: const TextStyle(
+                              fontSize: 13,
                               fontWeight: FontWeight.w800,
                               color: Colors.white,
                             ),
@@ -135,7 +199,50 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
 
                   const SizedBox(height: 16),
 
-                  // Flight Timeline
+                  // Real Check-In / Check-Out buttons - gated by real status
+                  if (_canCheckIn || _canCheckOut) ...[
+                    if (_actionError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          _actionError!,
+                          style: const TextStyle(color: Colors.red, fontSize: 12),
+                        ),
+                      ),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: _isActionLoading
+                            ? null
+                            : (_canCheckIn ? _handleCheckIn : _handleCheckOut),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _canCheckIn ? green : darkNavy,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
+                        ),
+                        child: _isActionLoading
+                            ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2),
+                        )
+                            : Text(
+                          _canCheckIn ? 'Check In' : 'Check Out',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Flight Timeline - now shows real check-in/check-out dates
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -147,9 +254,8 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Flight Timeline',
+                          'Stay Timeline',
                           style: TextStyle(
-                            
                             fontSize: 15,
                             fontWeight: FontWeight.w800,
                             fontStyle: FontStyle.italic,
@@ -160,35 +266,24 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Arrival
-                            const Column(
+                            Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Arrival',
+                                const Text('Check-In',
                                     style: TextStyle(
-                                      
                                       fontSize: 11,
                                       fontWeight: FontWeight.w700,
                                       color: Colors.black54,
                                     )),
-                                SizedBox(height: 2),
-                                Text('OCT 23',
-                                    style: TextStyle(
-                                      
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w800,
-                                      color: darkNavy,
-                                    )),
-                                Text('00:20',
-                                    style: TextStyle(
-                                      
+                                const SizedBox(height: 2),
+                                Text(d['fromDate'] ?? '--',
+                                    style: const TextStyle(
                                       fontSize: 14,
-                                      fontWeight: FontWeight.w700,
+                                      fontWeight: FontWeight.w800,
                                       color: darkNavy,
                                     )),
                               ],
                             ),
-                            // Timeline center
                             Expanded(
                               child: Column(
                                 children: [
@@ -224,9 +319,8 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
                                     ],
                                   ),
                                   const SizedBox(height: 4),
-                                  const Text('1d 0h',
-                                      style: TextStyle(
-                                        
+                                  Text(d['duration'] ?? '',
+                                      style: const TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w700,
                                         color: Colors.black54,
@@ -234,30 +328,20 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
                                 ],
                               ),
                             ),
-                            // Departure
-                            const Column(
+                            Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                Text('Departure',
+                                const Text('Check-Out',
                                     style: TextStyle(
-                                      
                                       fontSize: 11,
                                       fontWeight: FontWeight.w700,
                                       color: Colors.black54,
                                     )),
-                                SizedBox(height: 2),
-                                Text('OCT 24',
-                                    style: TextStyle(
-                                      
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w800,
-                                      color: darkNavy,
-                                    )),
-                                Text('23:10',
-                                    style: TextStyle(
-                                      
+                                const SizedBox(height: 2),
+                                Text(d['toDate'] ?? '--',
+                                    style: const TextStyle(
                                       fontSize: 14,
-                                      fontWeight: FontWeight.w700,
+                                      fontWeight: FontWeight.w800,
                                       color: darkNavy,
                                     )),
                               ],
@@ -266,32 +350,18 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
                         ),
                         const Divider(height: 24, color: Color(0xFFEEEEEE)),
 
-                        // Hotel name
+                        // Hotel name - real
                         Text(
-                          d['hotel'] ?? 'Leela Mumbai',
+                          d['hotel'] ?? 'Hotel details unavailable',
                           style: const TextStyle(
-                            
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
                             color: darkNavy,
                           ),
                         ),
-                        const SizedBox(height: 4),
-
-                        // Address in light blue
-                        const Text(
-                          'Sahar Airport Road, Andheri - Kurla Rd, near Mumbai International Airport, Greater Indra Nagar, Andheri East, Mumbai, Maharashtra 400059',
-                          style: TextStyle(
-                            
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: otpBlue,
-                            height: 1.5,
-                          ),
-                        ),
                         const SizedBox(height: 10),
 
-                        // Hotel images
+                        // Hotel images - static placeholder (no real images exist in API)
                         SizedBox(
                           height: 70,
                           child: Row(
@@ -318,7 +388,7 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
                         ),
                         const SizedBox(height: 12),
 
-                        // OTP box
+                        // OTP box - static (per doc: OTP handling still pending team decision)
                         Container(
                           decoration: BoxDecoration(
                             color: const Color(0xFFFAFAFA),
@@ -343,25 +413,22 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
                                       children: [
                                         const Text('Check-In',
                                             style: TextStyle(
-                                                
                                                 fontSize: 13,
                                                 fontWeight: FontWeight.w800,
                                                 color: darkNavy)),
                                         const SizedBox(height: 2),
-                                        Text('Nov 07, 2025 - 08:10',
-                                            style: TextStyle(
-                                                
+                                        Text(d['fromDate'] ?? '--',
+                                            style: const TextStyle(
                                                 fontSize: 11,
                                                 fontWeight: FontWeight.w700,
                                                 color: textDarkGrey)),
                                         const SizedBox(height: 4),
                                         Row(
                                           children: [
-                                            Flexible(
+                                            const Flexible(
                                               child: Text('OTP @ check in ',
                                                   overflow: TextOverflow.ellipsis,
                                                   style: TextStyle(
-                                                      
                                                       fontSize: 10,
                                                       fontStyle: FontStyle.italic,
                                                       fontWeight: FontWeight.w700,
@@ -370,7 +437,6 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
                                             Text(
                                                 _showCheckInOtp ? '4521' : '****',
                                                 style: const TextStyle(
-                                                    
                                                     fontSize: 10,
                                                     fontStyle: FontStyle.italic,
                                                     fontWeight: FontWeight.w700,
@@ -402,25 +468,22 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
                                       children: [
                                         const Text('Check-Out',
                                             style: TextStyle(
-                                                
                                                 fontSize: 13,
                                                 fontWeight: FontWeight.w800,
                                                 color: darkNavy)),
                                         const SizedBox(height: 2),
-                                        Text('Nov 08, 2025 - 08:10',
-                                            style: TextStyle(
-                                                
+                                        Text(d['toDate'] ?? '--',
+                                            style: const TextStyle(
                                                 fontSize: 11,
                                                 fontWeight: FontWeight.w700,
                                                 color: textDarkGrey)),
                                         const SizedBox(height: 4),
                                         Row(
                                           children: [
-                                            Flexible(
+                                            const Flexible(
                                               child: Text('OTP @ check out ',
                                                   overflow: TextOverflow.ellipsis,
                                                   style: TextStyle(
-                                                      
                                                       fontSize: 10,
                                                       fontStyle: FontStyle.italic,
                                                       fontWeight: FontWeight.w700,
@@ -429,7 +492,6 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
                                             Text(
                                                 _showCheckOutOtp ? '7893' : '****',
                                                 style: const TextStyle(
-                                                    
                                                     fontSize: 10,
                                                     fontStyle: FontStyle.italic,
                                                     fontWeight: FontWeight.w700,
@@ -457,12 +519,11 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Align(
+                        const Align(
                           alignment: Alignment.centerRight,
                           child: Text(
-                            '*Share the OTPs during Check-in and Check-out',
+                            '*OTP shown here is a placeholder — pending backend decision',
                             style: TextStyle(
-                              
                               fontSize: 9,
                               fontWeight: FontWeight.w700,
                               fontStyle: FontStyle.italic,
@@ -476,69 +537,7 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
 
                   const SizedBox(height: 12),
 
-                  // Call Duty Manager
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF114995),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.headset_mic_outlined,
-                            color: Colors.white, size: 22),
-                        const SizedBox(width: 12),
-                        const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Call Duty Manager',
-                                style: TextStyle(
-                                  
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white,
-                                )),
-                            SizedBox(height: 2),
-                            Text('+91 9876543210',
-                                style: TextStyle(
-                                  
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                )),
-                            SizedBox(height: 4),
-                            Row(
-                              children: [
-                                SizedBox(
-                                  width: 8,
-                                  height: 8,
-                                  child: DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      color: Color(0xFF14AE5C),
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(width: 6),
-                                Text('Available Now',
-                                    style: TextStyle(
-                                      
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.white70,
-                                    )),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Amenities & Policies
+                  // Amenities & Policies - static, no real data exists in API
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -551,10 +550,16 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
                       children: [
                         const Text('Amenities & Policies',
                             style: TextStyle(
-                              
                               fontSize: 14,
                               fontWeight: FontWeight.w800,
                               color: darkNavy,
+                            )),
+                        const SizedBox(height: 4),
+                        const Text('Not yet available from backend',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontStyle: FontStyle.italic,
+                              color: Colors.black45,
                             )),
                         const SizedBox(height: 12),
                         Wrap(
@@ -573,7 +578,7 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
 
                   const SizedBox(height: 12),
 
-                  // Transfer Details
+                  // Transfer Details - static, transport records currently empty in API
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -586,17 +591,18 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
                       children: [
                         const Text('Transfer Details',
                             style: TextStyle(
-                              
                               fontSize: 14,
                               fontWeight: FontWeight.w800,
                               color: darkNavy,
                             )),
+                        const SizedBox(height: 4),
+                        const Text('No transport data available yet',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontStyle: FontStyle.italic,
+                              color: Colors.black45,
+                            )),
                         const SizedBox(height: 12),
-                        // ← Airport to Hotel in otpBlue
-                        _transferCard('Airport to Hotel'),
-                        const SizedBox(height: 12),
-                        // ← Hotel to Airport in otpBlue
-                        _transferCard('Hotel to Airport'),
                       ],
                     ),
                   ),
@@ -626,89 +632,12 @@ class _DutyDetailScreenState extends State<DutyDetailScreen> {
           const SizedBox(width: 6),
           Text(label,
               style: const TextStyle(
-                
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
                 color: darkNavy,
               )),
         ],
       ),
-    );
-  }
-
-  Widget _transferCard(String title) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FF),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFDADADA), width: 0.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ← title in otpBlue
-          Text(title,
-              style: const TextStyle(
-                
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: otpBlue,
-              )),
-          const SizedBox(height: 10),
-          _infoRow(Icons.directions_car_outlined, 'DL 12CB2345'),
-          const SizedBox(height: 8),
-          _infoRow(Icons.call_outlined, '+91 9876543210'),
-          const SizedBox(height: 8),
-          _infoRow(Icons.person_outline, 'Mike'),
-          const SizedBox(height: 8),
-          _infoRow(Icons.badge_outlined, 'Terminal 1'),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {},
-              style: ElevatedButton.styleFrom(
-                backgroundColor: gold,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-              ),
-              child: const Text('Track Location',
-                  style: TextStyle(
-                    
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  )),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _infoRow(IconData icon, String text) {
-    return Row(
-      children: [
-        Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: const Color(0xFFDADADA)),
-          ),
-          child: Icon(icon, size: 14, color: darkNavy),
-        ),
-        const SizedBox(width: 10),
-        Text(text,
-            style: const TextStyle(
-              
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: darkNavy,
-            )),
-      ],
     );
   }
 }

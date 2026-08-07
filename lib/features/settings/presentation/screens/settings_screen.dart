@@ -1,14 +1,58 @@
 import 'package:flutter/material.dart';
 import '../../../auth/presentation/screens/login_screen.dart';
+import '../../../../core/storage/token_storage.dart';
+import '../../../notifications/data/push_notification_service.dart';
+import '../../data/profile_repository.dart';
 import 'profile_screen.dart';
 import 'preferences_screen.dart';
 import 'help_support_screen.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
   static const Color darkNavy = Color(0xFF04193E);
   static const Color lightNavy = Color(0xFF0A2E6B);
+
+  final _profileRepository = ProfileRepository();
+  bool _isLoading = true;
+  String _name = '';
+  String _email = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    final result = await _profileRepository.getMyProfile();
+    if (!mounted) return;
+    if (result.success && result.profile != null) {
+      setState(() {
+        _name = result.profile!.fullName;
+        _email = result.profile!.email;
+        _isLoading = false;
+      });
+    } else {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _logout() async {
+    await PushNotificationService().removeToken();
+    await TokenStorage.clearTokens();
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,9 +79,9 @@ class SettingsScreen extends StatelessWidget {
             padding: EdgeInsets.fromLTRB(16, topPad + 14, 16, 30),
             child: Column(
               children: [
-                Align(
+                const Align(
                   alignment: Alignment.centerLeft,
-                  child: const Icon(Icons.arrow_back_ios,
+                  child: Icon(Icons.arrow_back_ios,
                       color: Colors.white, size: 18),
                 ),
                 const SizedBox(height: 16),
@@ -53,25 +97,33 @@ class SettingsScreen extends StatelessWidget {
                       color: Colors.white, size: 44),
                 ),
                 const SizedBox(height: 14),
-                Text('Durgesh Shanbagh',
-                    style: TextStyle(
+                _isLoading
+                    ? const SizedBox(
+                  height: 24,
+                  width: 24,
+                  child: CircularProgressIndicator(
+                      color: Colors.white, strokeWidth: 2),
+                )
+                    : Text(_name.isNotEmpty ? _name : '--',
+                    style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
                         color: Colors.white)),
                 const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(20),
+                if (!_isLoading)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(_email.isNotEmpty ? _email : '--',
+                        style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white)),
                   ),
-                  child: Text('durgesh@rezolvhospitality.com',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white)),
-                ),
               ],
             ),
           ),
@@ -82,7 +134,7 @@ class SettingsScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Account Settings',
+                  const Text('Account Settings',
                       style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
@@ -98,18 +150,10 @@ class SettingsScreen extends StatelessWidget {
                       'Help & Support', 'Get assistance and support', const HelpSupportScreen()),
                   const SizedBox(height: 30),
 
-                  // Log Out button - navigates to login
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const LoginScreen()),
-                              (route) => false,
-                        );
-                      },
+                      onPressed: _logout,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF072D62),
                         elevation: 0,
@@ -118,7 +162,7 @@ class SettingsScreen extends StatelessWidget {
                         padding:
                         const EdgeInsets.symmetric(vertical: 16),
                       ),
-                      child: Text('Log Out',
+                      child: const Text('Log Out',
                           style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w800,
@@ -166,10 +210,10 @@ class SettingsScreen extends StatelessWidget {
                 fontWeight: FontWeight.w800,
                 color: darkNavy)),
         subtitle: Text(subtitle,
-            style: TextStyle(
+            style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: const Color(0xFF6B7280))),
+                color: Color(0xFF6B7280))),
         trailing: const Icon(Icons.chevron_right,
             color: Color(0xFF04193E), size: 22),
         onTap: () {

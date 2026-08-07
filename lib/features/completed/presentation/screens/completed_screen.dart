@@ -1,65 +1,56 @@
 import 'package:flutter/material.dart';
 import '../../../home/presentation/screens/feedback_screen.dart';
-import '../../../home/presentation/screens/view_incident_screen.dart';
+import '../../../upcoming/data/duties_repository.dart';
 
-class CompletedScreen extends StatelessWidget {
+class CompletedScreen extends StatefulWidget {
   const CompletedScreen({super.key});
 
-  static const Color darkNavy   = Color(0xFF04193E); // darkened
-  static const Color lightNavy  = Color(0xFF0A2E6B); // darkened
-  static const Color badgeColor = Color(0xFFE2B741);
-  static const Color redCode    = Color(0xFFC62828); // darkened
+  @override
+  State<CompletedScreen> createState() => _CompletedScreenState();
+}
 
-  final List<Map<String, String>> _duties = const [
-    {
-      'hotel': 'Westin, Kolkata',
-      'code': 'CCU',
-      'from': 'DEL',
-      'to': 'JDH',
-      'fromDate': 'Nov 10, 11:20',
-      'toDate': 'Nov 11, 08:00',
-    },
-    {
-      'hotel': 'Westin, Kolkata',
-      'code': 'CCU',
-      'from': 'DEL',
-      'to': 'JDH',
-      'fromDate': 'Nov 10, 11:20',
-      'toDate': 'Nov 11, 08:00',
-    },
-    {
-      'hotel': 'Westin, Kolkata',
-      'code': 'CCU',
-      'from': 'DEL',
-      'to': 'JDH',
-      'fromDate': 'Nov 10, 11:20',
-      'toDate': 'Nov 11, 08:00',
-    },
-    {
-      'hotel': 'Taj, Delhi',
-      'code': 'DEL',
-      'from': 'BOM',
-      'to': 'DEL',
-      'fromDate': 'Oct 25, 09:00',
-      'toDate': 'Oct 26, 06:00',
-    },
-    {
-      'hotel': 'Marriott, Mumbai',
-      'code': 'BOM',
-      'from': 'DEL',
-      'to': 'BOM',
-      'fromDate': 'Oct 15, 10:00',
-      'toDate': 'Oct 16, 08:00',
-    },
-    {
-      'hotel': 'Hyatt, Bangalore',
-      'code': 'BLR',
-      'from': 'DEL',
-      'to': 'BLR',
-      'fromDate': 'Oct 05, 07:00',
-      'toDate': 'Oct 06, 05:00',
-    },
-  ];
+class _CompletedScreenState extends State<CompletedScreen> {
+  static const Color darkNavy   = Color(0xFF04193E);
+  static const Color lightNavy  = Color(0xFF0A2E6B);
+  static const Color badgeColor = Color(0xFFE2B741);
+  static const Color redCode    = Color(0xFFC62828);
+
+  final _dutiesRepository = DutiesRepository();
+  bool _isLoading = true;
+  String? _errorMessage;
+  List<Map<String, String>> _duties = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCompleted();
+  }
+
+  Future<void> _loadCompleted() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    final result = await _dutiesRepository.getAllDuties();
+
+    if (!mounted) return;
+
+    if (result.success) {
+      setState(() {
+        _duties = result.duties
+            .where((d) => d.status == 'CHECKED_OUT')
+            .map((d) => d.toMap())
+            .toList();
+        _isLoading = false;
+      });
+    } else {
+      setState(() {
+        _errorMessage = result.errorMessage;
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -92,7 +83,6 @@ class CompletedScreen extends StatelessWidget {
                 Text(
                   'Completed',
                   style: TextStyle(
-                    
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
                     color: Colors.white,
@@ -102,7 +92,37 @@ class CompletedScreen extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: SingleChildScrollView(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _errorMessage != null
+                ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_errorMessage!,
+                        style: const TextStyle(color: Colors.red),
+                        textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                        onPressed: _loadCompleted,
+                        child: const Text('Retry')),
+                  ],
+                ),
+              ),
+            )
+                : _duties.isEmpty
+                ? const Center(
+              child: Text(
+                'No completed duties',
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF6B7280)),
+              ),
+            )
+                : SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
               child: Column(
                 children: _duties
@@ -122,198 +142,156 @@ class CompletedScreen extends StatelessWidget {
   Widget _buildDutyCard(BuildContext context, Map<String, String> d) {
     return ClipPath(
       clipper: _TicketClipper(),
-      child: GestureDetector(
-        // Tapping anywhere on the card (other than the Feedback button,
-        // which has its own GestureDetector and wins the gesture arena
-        // for taps inside its bounds) opens the incident screen.
-        behavior: HitTestBehavior.opaque,
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const ViewIncidentScreen(),
-          ),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.25),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.25),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Hotel + code
-              Row(
-                children: [
-                  Text(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
                     d['hotel']!,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                     style: const TextStyle(
-                      
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 0.32,
                       color: darkNavy,
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '(${d['code']!})',
-                    style: const TextStyle(
-                      
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.32,
-                      color: redCode,
-                    ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '(${d['code']!})',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.32,
+                    color: redCode,
                   ),
-                ],
-              ),
-              const SizedBox(height: 10),
-
-              // DEL ---?--- JDH
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    d['from']!,
-                    style: const TextStyle(
-                      
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.64,
-                      color: darkNavy,
-                    ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  d['from']!,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.64,
+                    color: darkNavy,
                   ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: LayoutBuilder(
-                            builder: (ctx, constraints) => CustomPaint(
-                              size: Size(constraints.maxWidth, 1),
-                              painter: _DashedLinePainter(),
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Transform.rotate(
-                            angle: 1.5708,
-                            child: const Icon(Icons.flight,
-                                size: 16, color: lightNavy),
-                          ),
-                        ),
-                        Expanded(
-                          child: LayoutBuilder(
-                            builder: (ctx, constraints) => CustomPaint(
-                              size: Size(constraints.maxWidth, 1),
-                              painter: _DashedLinePainter(),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    d['to']!,
-                    style: const TextStyle(
-                      
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.64,
-                      color: darkNavy,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-
-              // Dates
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    d['fromDate']!,
-                    style: const TextStyle(
-                      
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.28,
-                      color: lightNavy,
-                    ),
-                  ),
-                  Text(
-                    d['toDate']!,
-                    style: const TextStyle(
-                      
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.28,
-                      color: lightNavy,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-
-              // Buttons row
-              Row(
-                children: [
-                  // Feedback -> FeedbackScreen (its own GestureDetector
-                  // takes priority over the card-wide one above it)
-                  Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const FeedbackScreen(),
-                        ),
-                      ),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          color: badgeColor,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Text(
-                          'Feedback',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (ctx, constraints) => CustomPaint(
+                            size: Size(constraints.maxWidth, 1),
+                            painter: _DashedLinePainter(),
                           ),
                         ),
                       ),
-                    ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Transform.rotate(
+                          angle: 1.5708,
+                          child: const Icon(Icons.flight,
+                              size: 16, color: lightNavy),
+                        ),
+                      ),
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (ctx, constraints) => CustomPaint(
+                            size: Size(constraints.maxWidth, 1),
+                            painter: _DashedLinePainter(),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-
-                  // View Incident label kept for visual context; the whole
-                  // card (including this) already opens ViewIncidentScreen
-                  Expanded(
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  d['to']!,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.64,
+                    color: darkNavy,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  d['fromDate']!,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.28,
+                    color: lightNavy,
+                  ),
+                ),
+                Text(
+                  d['toDate']!,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.28,
+                    color: lightNavy,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => FeedbackScreen(
+                          hotelName: d['hotel'],
+                          bookingId: d['bookingId'],
+                          hotelId: d['hotelId'],
+                          crewId: d['crewId'],
+                        ),
+                      ),
+                    ),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       decoration: BoxDecoration(
-                        color: redCode,
+                        color: badgeColor,
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: const Text(
-                        'View Incident',
+                        'Feedback',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
                           color: Colors.white,
@@ -321,22 +299,21 @@ class CompletedScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: const BoxDecoration(
-                      color: darkNavy,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.chevron_right,
-                        color: Colors.white, size: 18),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: const BoxDecoration(
+                    color: darkNavy,
+                    shape: BoxShape.circle,
                   ),
-                ],
-              ),
-            ],
-          ),
+                  child: const Icon(Icons.chevron_right,
+                      color: Colors.white, size: 18),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../data/profile_repository.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -11,17 +12,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
   static const Color darkNavy = Color(0xFF072D62);
   static const Color lightNavy = Color(0xFF114995);
 
-  // Controllers hold the editable text for each field.
-  // TODO: replace these initial values with real user data (e.g. from your auth/user model).
-  final _nameController = TextEditingController(text: 'Durgesh Shanbagh');
-  final _emailController =
-  TextEditingController(text: 'durgesh@rezolvhospitality.com');
-  final _phoneController = TextEditingController(text: '+91 9876543210');
-  final _empIdController = TextEditingController(text: 'EMP-10293');
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _empIdController = TextEditingController();
+
+  final _profileRepository = ProfileRepository();
+
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    final result = await _profileRepository.getMyProfile();
+
+    if (!mounted) return;
+
+    if (result.success && result.profile != null) {
+      setState(() {
+        _nameController.text = result.profile!.fullName;
+        _emailController.text = result.profile!.email;
+        _empIdController.text = result.profile!.username;
+        // Phone number not available from backend API yet — left blank.
+        _phoneController.text = '';
+        _isLoading = false;
+      });
+    } else {
+      setState(() {
+        _errorMessage = result.errorMessage;
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   void dispose() {
-    // Always dispose controllers to avoid memory leaks.
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
@@ -30,14 +65,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _saveChanges() {
-    // TODO: replace this with your real save logic
-    // (e.g. call an API / update local storage / update auth provider).
+    // NOTE: Backend has no update-profile endpoint yet (only GET /auth/me/).
+    // This currently does not persist changes to the server.
     final name = _nameController.text;
     final email = _emailController.text;
     final phone = _phoneController.text;
     final empId = _empIdController.text;
 
-    debugPrint('Saving profile: $name, $email, $phone, $empId');
+    debugPrint('Saving profile (local only): $name, $email, $phone, $empId');
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Profile updated successfully')),
@@ -76,7 +111,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(width: 12),
                 const Text('Profile',
                     style: TextStyle(
-                        
+
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
                         color: Colors.white)),
@@ -84,14 +119,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           Expanded(
-            child: SingleChildScrollView(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _errorMessage != null
+                ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _errorMessage!,
+                      style: const TextStyle(color: Colors.red),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: _loadProfile,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+                : SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('Edit your Personal Information',
                       style: TextStyle(
-                          
+
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
                           color: darkNavy)),
@@ -119,7 +177,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       child: const Text('Save Changes',
                           style: TextStyle(
-                              
+
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
                               color: Colors.white)),
@@ -134,7 +192,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // Now an actual editable text field, not a static Text() label.
   Widget _field(String label, TextEditingController controller,
       {TextInputType? keyboardType}) {
     return Column(
@@ -142,7 +199,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         Text(label,
             style: const TextStyle(
-                
+
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF6B7280))),
@@ -158,7 +215,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             controller: controller,
             keyboardType: keyboardType,
             style: const TextStyle(
-                 fontSize: 14, color: darkNavy),
+                fontSize: 14, color: darkNavy),
             decoration: const InputDecoration(
               border: InputBorder.none,
               contentPadding:

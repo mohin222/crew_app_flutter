@@ -2,37 +2,36 @@ name: crew_app_flutter
 description: "A new Flutter project."
 publish_to: 'none'
 version: 1.0.0+1
-
 environment:
   sdk: ^3.9.2
-
 dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
   url_launcher: ^6.3.0
   image_picker: ^1.1.2
-
+  dio: ^5.7.0
+  flutter_secure_storage: ^9.2.2
+  intl: ^0.19.0
+  firebase_core: ^4.13.0
+  firebase_messaging: ^16.5.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.13.1
-
+  change_app_package_name: ^1.5.0
 flutter:
   uses-material-design: true
-
   assets:
     - assets/images/splash_bg.png
     - assets/images/plane_icon.png
-
   fonts:
     - family: Montserrat
       fonts:
         - asset: assets/fonts/Montserrat-VariableFont.ttf
         - asset: assets/fonts/Montserrat-Italic-VariableFont.ttf
           style: italic
-
     - family: Poppins
       fonts:
         - asset: assets/fonts/Poppins-Regular.ttf
@@ -45,7 +44,6 @@ flutter:
           weight: 700
         - asset: assets/fonts/Poppins-ExtraBold.ttf
           weight: 800
-
 flutter_launcher_icons:
   android: true
   ios: true

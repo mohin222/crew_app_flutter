@@ -1,6 +1,9 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
+import '../../../../core/storage/token_storage.dart';
+import '../../../home/presentation/screens/main_screen.dart';
+import '../../../notifications/data/push_notification_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -26,7 +29,6 @@ class _SplashScreenState extends State<SplashScreen>
   late final AnimationController _controller;
   Animation<double>? _snapAnimation;
 
-  // Cloud puffs spawned behind the thumb while it moves (drag or auto-slide).
   final List<_CloudPuff> _clouds = [];
   final Random _rng = Random();
   double _lastSpawnX = -999;
@@ -43,6 +45,27 @@ class _SplashScreenState extends State<SplashScreen>
         _maybeSpawnCloud();
       }
     });
+  }
+
+  Future<void> _goToNextScreen() async {
+    if (_navigated) return;
+    _navigated = true;
+
+    final token = await TokenStorage.getAccessToken();
+    if (!mounted) return;
+
+    if (token != null && token.isNotEmpty) {
+      PushNotificationService().initialize();
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const MainScreen()),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+    }
   }
 
   @override
@@ -70,8 +93,6 @@ class _SplashScreenState extends State<SplashScreen>
     }
   }
 
-  // Tap on the thumb: auto-slide smoothly from current position to the end,
-  // spawning clouds along the way, then navigate.
   void _onThumbTap() {
     if (_isAutoSliding) return;
     _isAutoSliding = true;
@@ -91,12 +112,11 @@ class _SplashScreenState extends State<SplashScreen>
     );
     _controller.forward(from: 0).whenComplete(() {
       _isAutoSliding = false;
-      if (thenNavigate) _goToLogin();
+      if (thenNavigate) _goToNextScreen();
     });
   }
 
   void _maybeSpawnCloud() {
-    // Spawn a new puff roughly every 10px of travel.
     if ((_dragX - _lastSpawnX).abs() < 10) return;
     _lastSpawnX = _dragX;
     final puff = _CloudPuff(
@@ -106,7 +126,6 @@ class _SplashScreenState extends State<SplashScreen>
     );
     setState(() => _clouds.add(puff));
 
-    // Fade out & remove after a short life.
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
         setState(() => _clouds.remove(puff));
@@ -114,19 +133,8 @@ class _SplashScreenState extends State<SplashScreen>
     });
   }
 
-  void _goToLogin() {
-    if (_navigated) return;
-    _navigated = true;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    // Thumb fades/scales slightly as it nears the end, matching common
-    // slide-to-unlock feedback. Purely cosmetic ? safe to remove.
     final dragProgress = _maxDrag == 0 ? 0.0 : (_dragX / _maxDrag);
 
     return Scaffold(
@@ -155,7 +163,6 @@ class _SplashScreenState extends State<SplashScreen>
                   'CREW\nSCHEDULE',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    
                     fontSize: 32,
                     fontWeight: FontWeight.w900,
                     color: Colors.white,
@@ -169,7 +176,6 @@ class _SplashScreenState extends State<SplashScreen>
                     'Stay Updated with your upcoming and past activities, and easily view accommodations all in one place',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
@@ -177,7 +183,6 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
                 const SizedBox(height: 22),
-                // --- Slide-to-start control ---
                 Container(
                   width: _trackWidth,
                   height: _trackHeight,
@@ -193,7 +198,6 @@ class _SplashScreenState extends State<SplashScreen>
                       alignment: Alignment.centerLeft,
                       clipBehavior: Clip.none,
                       children: [
-                        // Label fades out as the thumb covers it
                         Positioned.fill(
                           child: Center(
                             child: Opacity(
@@ -204,7 +208,6 @@ class _SplashScreenState extends State<SplashScreen>
                                 child: Text(
                                   'Get Started',
                                   style: TextStyle(
-                                    
                                     fontSize: 15,
                                     fontWeight: FontWeight.w800,
                                     color: Color(0xFF04193E),
@@ -214,8 +217,6 @@ class _SplashScreenState extends State<SplashScreen>
                             ),
                           ),
                         ),
-
-                        // Cloud puffs trailing behind the thumb
                         ..._clouds.map((c) => Positioned(
                           left: c.x - c.size / 2,
                           top: c.y - c.size / 2,
@@ -228,8 +229,6 @@ class _SplashScreenState extends State<SplashScreen>
                             ),
                           ),
                         )),
-
-                        // Draggable / tappable thumb
                         Positioned(
                           left: _dragX,
                           child: GestureDetector(
@@ -244,12 +243,8 @@ class _SplashScreenState extends State<SplashScreen>
                                 shape: BoxShape.circle,
                               ),
                               child: Center(
-                                // TODO: replace with the exact plane asset
-                                // exported from Figma dev mode, e.g.:
-                                // Image.asset('assets/icons/plane_icon.png',
-                                //     width: 18, height: 18),
                                 child: Transform.rotate(
-                                  angle: 1.59, // rotates icon to point rightward
+                                  angle: 1.59,
                                   child: const Icon(
                                     Icons.flight_rounded,
                                     color: Colors.white,

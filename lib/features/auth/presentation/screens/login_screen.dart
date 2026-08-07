@@ -4,6 +4,8 @@ import 'signup_screen.dart';
 import 'forgot_password_screen.dart';
 import '../../../../shared/widgets/plane_icon.dart';
 import '../../../../shared/widgets/bowl_shape.dart';
+import '../../data/auth_repository.dart';
+import '../../../notifications/data/push_notification_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,6 +19,10 @@ class _LoginScreenState extends State<LoginScreen>
   final _emailController    = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+
+  bool _isLoading = false;
+  String? _errorMessage;
+  final _authRepository = AuthRepository();
 
   late AnimationController _animController;
   late Animation<double> _slideAnim;
@@ -56,11 +62,30 @@ class _LoginScreenState extends State<LoginScreen>
     });
   }
 
-  void _login() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const MainScreen()),
+  Future<void> _login() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    final result = await _authRepository.login(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
     );
+
+    if (!mounted) return;
+
+    setState(() => _isLoading = false);
+
+    if (result.success) {
+      PushNotificationService().initialize();
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const MainScreen()),
+      );
+    } else {
+      setState(() => _errorMessage = result.errorMessage);
+    }
   }
 
   @override
@@ -396,6 +421,21 @@ class _LoginScreenState extends State<LoginScreen>
 
                             const SizedBox(height: 20),
 
+                            if (_errorMessage != null)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 28),
+                                child: Text(
+                                  _errorMessage!,
+                                  style: const TextStyle(
+                                    color: Colors.red,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+
+                            const SizedBox(height: 12),
+
                             // Sign In button
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 28),
@@ -403,14 +443,23 @@ class _LoginScreenState extends State<LoginScreen>
                                 width: double.infinity,
                                 height: 49,
                                 child: ElevatedButton(
-                                  onPressed: _login,
+                                  onPressed: _isLoading ? null : _login,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF114995),
                                     elevation: 0,
                                     shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(15)),
                                   ),
-                                  child: const Text(
+                                  child: _isLoading
+                                      ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2.5,
+                                    ),
+                                  )
+                                      : const Text(
                                     'Sign In',
                                     style: TextStyle(
                                       fontSize: 18,
@@ -425,7 +474,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                             const SizedBox(height: 20),
 
-                            // Sign Up with SSO — font from theme
+                            // Sign Up with SSO
                             GestureDetector(
                               onTap: () {},
                               child: RichText(
@@ -451,7 +500,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                             const SizedBox(height: 16),
 
-                            // Don't have account — font from theme
+                            // Don't have account
                             GestureDetector(
                               onTap: () => Navigator.push(context,
                                   MaterialPageRoute(builder: (_) => const SignUpScreen())),

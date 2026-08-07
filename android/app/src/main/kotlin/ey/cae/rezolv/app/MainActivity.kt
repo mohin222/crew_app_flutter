@@ -1,4 +1,4 @@
-package com.example.crew_app_flutter
+package ey.cae.rezolv.app
 
 import io.flutter.embedding.android.FlutterActivity
 

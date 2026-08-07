@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 class ViewIncidentScreen extends StatelessWidget {
-  const ViewIncidentScreen({super.key});
+  final String? hotelName;
+
+  const ViewIncidentScreen({super.key, this.hotelName});
 
   static const Color darkNavy  = Color(0xFF072D62);
   static const Color lightNavy = Color(0xFF114995);
@@ -42,7 +44,6 @@ class ViewIncidentScreen extends StatelessWidget {
                     const Text(
                       'Incident HT15560',
                       style: TextStyle(
-                        
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
                         color: Colors.white,
@@ -60,7 +61,6 @@ class ViewIncidentScreen extends StatelessWidget {
                       Text(
                         'Submitted on Oct 23, 2025; 2:51 PM',
                         style: TextStyle(
-                          
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                           fontStyle: FontStyle.italic,
@@ -93,35 +93,13 @@ class ViewIncidentScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Crowne Plaza, Melbourne',
-                          style: TextStyle(
-                            
+                        Text(
+                          hotelName ?? 'Hotel details unavailable',
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
                             color: Colors.white,
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Icon(Icons.location_on_outlined,
-                                color: Colors.white, size: 14),
-                            SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                'Crowne Plaza Melbourne, 1-5 Spencer St, Docklands VIC 3008, Australia',
-                                style: TextStyle(
-                                  
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.white,
-                                  height: 1.5,
-                                ),
-                              ),
-                            ),
-                          ],
                         ),
                         const SizedBox(height: 12),
                         Container(
@@ -134,7 +112,6 @@ class ViewIncidentScreen extends StatelessWidget {
                           child: const Text(
                             'Status : Resolved',
                             style: TextStyle(
-                              
                               fontSize: 13,
                               fontWeight: FontWeight.w800,
                               color: Colors.white,
@@ -165,11 +142,9 @@ class ViewIncidentScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Descriptions
                         const Text(
                           'Descriptions',
                           style: TextStyle(
-                            
                             fontSize: 15,
                             fontWeight: FontWeight.w800,
                             color: darkNavy,
@@ -179,7 +154,6 @@ class ViewIncidentScreen extends StatelessWidget {
                         const Text(
                           'Scanning barcode...If it takes longer than expected, please check whether your Bluetooth is connected.',
                           style: TextStyle(
-                            
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
                             color: Colors.black87,
@@ -189,11 +163,9 @@ class ViewIncidentScreen extends StatelessWidget {
 
                         const SizedBox(height: 20),
 
-                        // Incident Type
                         const Text(
                           'Incident Type',
                           style: TextStyle(
-                            
                             fontSize: 15,
                             fontWeight: FontWeight.w800,
                             color: darkNavy,
@@ -212,11 +184,9 @@ class ViewIncidentScreen extends StatelessWidget {
 
                         const SizedBox(height: 20),
 
-                        // Attachments
                         const Text(
                           'Attachments',
                           style: TextStyle(
-                            
                             fontSize: 15,
                             fontWeight: FontWeight.w800,
                             color: darkNavy,
@@ -251,7 +221,6 @@ class ViewIncidentScreen extends StatelessWidget {
       child: Text(
         label,
         style: const TextStyle(
-          
           fontSize: 12,
           fontWeight: FontWeight.w800,
           color: Color(0xFFC62828),
@@ -268,7 +237,6 @@ class ViewIncidentScreen extends StatelessWidget {
         Text(
           label,
           style: const TextStyle(
-            
             fontSize: 13,
             fontWeight: FontWeight.w800,
             fontStyle: FontStyle.italic,

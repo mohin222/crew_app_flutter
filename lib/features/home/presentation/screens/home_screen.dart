@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/constants/app_colors.dart';
-import 'report_issue_screen.dart';
+import '../../data/booking_repository.dart';
+import '../../data/hotel_repository.dart';
+import '../../data/transport_repository.dart';
+import '../../../settings/data/profile_repository.dart';
 import 'feedback_screen.dart';
+import '../../../notifications/presentation/screens/notification_history_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,8 +21,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _showCheckInOtp = false;
   bool _showCheckOutOtp = false;
 
-  static const String _checkInOtpValue = '4521';
-  static const String _checkOutOtpValue = '7893';
+  static const String _checkInOtpValue = 'N/A';
+  static const String _checkOutOtpValue = 'N/A';
 
   final List<String> _hotelImages = [
     'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=300',
@@ -26,19 +31,32 @@ class _HomeScreenState extends State<HomeScreen> {
     'https://images.unsplash.com/photo-1584132967334-10e028bd69f7?w=300',
   ];
 
-  static const String _hotelAddress =
-      'Crowne Plaza Melbourne, 1-5 Spencer St, Docklands VIC 3008, Australia';
+  static const String _hotelAddress = 'Address not available';
 
   static const Color navy           = Color(0xFF072D62);
+  static const Color dullNavy       = Color(0xFF6B7A99);
   static const Color textDarkGrey   = Color(0xFF0A0A0A);
   static const Color otpBlue        = Color(0xFF0093E9);
-  static const Color reportRed      = Color(0xFFD50D27);
   static const Color feedbackYellow = Color(0xFFE2B741);
   static const Color chipGrey       = Color(0xFFD9D9D9);
   static const Color chipGreen      = Color(0xFF14AE5C);
 
   final ScrollController _scrollController = ScrollController();
   double _scrollOffset = 0;
+
+  final _profileRepository = ProfileRepository();
+  final _bookingRepository = BookingRepository();
+  final _hotelRepository = HotelRepository();
+  final _transportRepository = TransportRepository();
+
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  String _crewName = '';
+  String _crewId = '';
+  Booking? _latestBooking;
+  HotelInfo? _hotelInfo;
+  List<TransportInfo> _transports = [];
 
   @override
   void initState() {
@@ -48,6 +66,62 @@ class _HomeScreenState extends State<HomeScreen> {
         _scrollOffset = _scrollController.offset;
       });
     });
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    final profileResult = await _profileRepository.getMyProfile();
+    final bookingsResult = await _bookingRepository.getMyBookings();
+
+    if (!mounted) return;
+
+    if (!profileResult.success || !bookingsResult.success) {
+      setState(() {
+        _errorMessage = profileResult.errorMessage ?? bookingsResult.errorMessage;
+        _isLoading = false;
+      });
+      return;
+    }
+
+    final latestBooking =
+    bookingsResult.bookings.isNotEmpty ? bookingsResult.bookings.first : null;
+
+    HotelInfo? hotelInfo;
+    List<TransportInfo> transports = [];
+
+    if (latestBooking != null) {
+      if (latestBooking.hotelId.isNotEmpty) {
+        final hotelResult = await _hotelRepository.getHotelById(latestBooking.hotelId);
+        if (hotelResult.success) {
+          hotelInfo = hotelResult.hotel;
+        }
+      }
+
+      final transportResult = await _transportRepository.getTransportsForBooking(latestBooking.id);
+      if (transportResult.success) {
+        transports = transportResult.transports;
+      }
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _crewName = profileResult.profile?.fullName ?? '';
+      _crewId = profileResult.profile?.crewId ?? '';
+      _latestBooking = latestBooking;
+      _hotelInfo = hotelInfo;
+      _transports = transports;
+      _isLoading = false;
+    });
+  }
+
+  String _formatDateTime(DateTime dt) {
+    return DateFormat('MMM dd, yyyy - HH:mm').format(dt.toLocal());
   }
 
   @override
@@ -94,11 +168,43 @@ class _HomeScreenState extends State<HomeScreen> {
     final double nameFontSize = 24 - (6 * collapseProgress);
     final double namePadTop = topPad + 14 - (14 * collapseProgress * 0.5);
 
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFFAFAFA),
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFFAFAFA),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_errorMessage!,
+                    style: const TextStyle(color: Colors.red), textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final checkInText =
+    _latestBooking != null ? _formatDateTime(_latestBooking!.checkInUtc) : '--';
+    final checkOutText =
+    _latestBooking != null ? _formatDateTime(_latestBooking!.checkOutUtc) : '--';
+    final hotelNameText = _hotelInfo?.name ?? 'Hotel details unavailable';
+
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
       body: Stack(
         children: [
-          // ── Scrollable Content ─────────────────────────────
           SingleChildScrollView(
             controller: _scrollController,
             child: Column(
@@ -134,9 +240,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'CROWNE PLAZA MELBOURNE,\nAN IHG HOTEL',
+                                hotelNameText.toUpperCase(),
                                 style: TextStyle(
-                                  
                                   fontSize: 16,
                                   fontWeight: FontWeight.w800,
                                   color: navy,
@@ -157,7 +262,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                       child: Text(
                                         _hotelAddress,
                                         style: const TextStyle(
-                                          
                                           fontSize: 10,
                                           fontWeight: FontWeight.w700,
                                           color: otpBlue,
@@ -224,15 +328,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                             children: [
                                               Text('Check-In',
                                                   style: TextStyle(
-                                                      
                                                       fontSize: 14,
                                                       fontWeight: FontWeight.w800,
                                                       color: navy,
                                                       letterSpacing: 0.56)),
                                               const SizedBox(height: 2),
-                                              Text('Nov 07, 2025 - 08:10',
+                                              Text(checkInText,
                                                   style: TextStyle(
-                                                      
                                                       fontSize: 12,
                                                       fontWeight: FontWeight.w700,
                                                       color: textDarkGrey)),
@@ -243,7 +345,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                                     child: Text('OTP @ check in ',
                                                         overflow: TextOverflow.ellipsis,
                                                         style: TextStyle(
-                                                            
                                                             fontSize: 11,
                                                             fontStyle: FontStyle.italic,
                                                             fontWeight: FontWeight.w700,
@@ -252,7 +353,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                                   Text(
                                                       _showCheckInOtp ? _checkInOtpValue : '****',
                                                       style: const TextStyle(
-                                                          
                                                           fontSize: 11,
                                                           fontStyle: FontStyle.italic,
                                                           fontWeight: FontWeight.w700,
@@ -284,15 +384,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                             children: [
                                               Text('Check-Out',
                                                   style: TextStyle(
-                                                      
                                                       fontSize: 14,
                                                       fontWeight: FontWeight.w800,
                                                       color: navy,
                                                       letterSpacing: 0.56)),
                                               const SizedBox(height: 2),
-                                              Text('Nov 08, 2025 - 08:10',
+                                              Text(checkOutText,
                                                   style: TextStyle(
-                                                      
                                                       fontSize: 12,
                                                       fontWeight: FontWeight.w700,
                                                       color: textDarkGrey)),
@@ -303,7 +401,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                                     child: Text('OTP @ check out ',
                                                         overflow: TextOverflow.ellipsis,
                                                         style: TextStyle(
-                                                            
                                                             fontSize: 11,
                                                             fontStyle: FontStyle.italic,
                                                             fontWeight: FontWeight.w700,
@@ -312,7 +409,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                                   Text(
                                                       _showCheckOutOtp ? _checkOutOtpValue : '****',
                                                       style: const TextStyle(
-                                                          
                                                           fontSize: 11,
                                                           fontStyle: FontStyle.italic,
                                                           fontWeight: FontWeight.w700,
@@ -345,7 +441,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                 child: Text(
                                   '*Share the OTPs during Check-in and Check-out',
                                   style: TextStyle(
-                                    
                                     fontSize: 10,
                                     fontWeight: FontWeight.w700,
                                     fontStyle: FontStyle.italic,
@@ -368,19 +463,18 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: Row(
                             children: [
                               Expanded(
-                                child: _actionBtn('Report', reportRed,
-                                    onTap: () => Navigator.push(context,
-                                        MaterialPageRoute(builder: (_) => const ReportIssueScreen()))),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
                                 child: _actionBtn('Feedback', feedbackYellow,
                                     onTap: () => Navigator.push(context,
-                                        MaterialPageRoute(builder: (_) => const FeedbackScreen()))),
+                                        MaterialPageRoute(builder: (_) => FeedbackScreen(
+                                          hotelName: hotelNameText,
+                                          bookingId: _latestBooking?.id,
+                                          hotelId: _latestBooking?.hotelId,
+                                          crewId: _crewId,
+                                        )))),
                               ),
-                              const SizedBox(width: 6),
+                              const SizedBox(width: 8),
                               Expanded(child: _actionBtn('Call Us', navy, onTap: () {})),
-                              const SizedBox(width: 6),
+                              const SizedBox(width: 8),
                               Expanded(child: _actionBtn('Chat Us', navy, onTap: () {})),
                             ],
                           ),
@@ -393,7 +487,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // ── Animated Sticky Header ─────────────────────────
           Positioned(
             top: 0,
             left: 0,
@@ -427,7 +520,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: const Text(
                               'Welcome Back,',
                               style: TextStyle(
-                                
                                 fontSize: 14,
                                 color: Colors.white70,
                                 fontWeight: FontWeight.w700,
@@ -437,9 +529,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         const SizedBox(height: 2),
                         Text(
-                          'Durgesh Shanbagh',
+                          _crewName.isNotEmpty ? _crewName : '--',
                           style: TextStyle(
-                            
                             fontSize: nameFontSize,
                             fontWeight: FontWeight.w800,
                             color: Colors.white,
@@ -449,10 +540,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                   ),
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 2),
-                    child: Icon(Icons.notifications_outlined,
-                        color: Colors.white, size: 22),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: GestureDetector(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const NotificationHistoryScreen()),
+                      ),
+                      child: const Icon(Icons.notifications_outlined,
+                          color: Colors.white, size: 22),
+                    ),
                   ),
                 ],
               ),
@@ -482,9 +579,8 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text('DEL - JDH',
+          Text(_latestBooking?.stationIata ?? '--',
               style: TextStyle(
-                  
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.52,
@@ -518,7 +614,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: Text(label,
             style: TextStyle(
-                
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.44,
@@ -531,25 +626,32 @@ class _HomeScreenState extends State<HomeScreen> {
     return _expandableCard(
       icon: Icons.spa_outlined,
       title: 'Amenities & Policies',
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: ['Spa', 'Swimming Pool', 'Wifi', 'Fitness Centre']
-            .map((label) => Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFDADADA)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Not yet available from backend',
+              style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: Colors.black45)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: ['Spa', 'Swimming Pool', 'Wifi', 'Fitness Centre']
+                .map((label) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFDADADA)),
+              ),
+              child: Text(label,
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: navy)),
+            ))
+                .toList(),
           ),
-          child: Text(label,
-              style: TextStyle(
-                  
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: navy)),
-        ))
-            .toList(),
+        ],
       ),
     );
   }
@@ -558,55 +660,68 @@ class _HomeScreenState extends State<HomeScreen> {
     return _expandableCard(
       icon: Icons.directions_car_outlined,
       title: 'Transport Details',
-      child: Column(
+      child: _transports.isEmpty
+          ? const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Text(
+          'No transport arranged for this booking yet.',
+          style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.black45),
+        ),
+      )
+          : Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _transportCard('Airport to Hotel', 'DL 12CB2345', '+91 9876543210', 'Mike', 'Terminal 1'),
-          const SizedBox(height: 12),
-          _transportCard('Hotel to Airport', 'DL 12CB2345', '+91 9876543210', 'Mike', 'Terminal 1'),
-        ],
+        children: _transports
+            .asMap()
+            .entries
+            .map((e) => Padding(
+          padding: EdgeInsets.only(bottom: e.key < _transports.length - 1 ? 12 : 0),
+          child: _transportCard(e.value),
+        ))
+            .toList(),
       ),
     );
   }
 
-  Widget _transportCard(String title, String carNo, String phone, String driver, String terminal) {
+  Widget _transportCard(TransportInfo t) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ← light blue title
-        Text(title,
+        Text(t.type.isNotEmpty ? t.type : 'Transport',
             style: const TextStyle(
-                
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
                 color: otpBlue)),
         const SizedBox(height: 8),
-        _transportInfoRow(Icons.directions_car_outlined, carNo),
+        _transportInfoRow(Icons.directions_car_outlined,
+            t.vehicleRegistration.isNotEmpty ? t.vehicleRegistration : '--'),
         const SizedBox(height: 8),
-        _transportInfoRow(Icons.call_outlined, phone),
+        _transportInfoRow(Icons.call_outlined,
+            t.driverPhone.isNotEmpty ? t.driverPhone : '--'),
         const SizedBox(height: 8),
-        _transportInfoRow(Icons.person_outline, driver),
+        _transportInfoRow(Icons.person_outline,
+            t.driverName.isNotEmpty ? t.driverName : '--'),
         const SizedBox(height: 8),
-        _transportInfoRow(Icons.badge_outlined, terminal),
+        _transportInfoRow(Icons.info_outline,
+            t.status.isNotEmpty ? t.status : '--'),
         const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: () {},
-            style: ElevatedButton.styleFrom(
-              backgroundColor: feedbackYellow,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              padding: const EdgeInsets.symmetric(vertical: 10),
+        if ((t.status).isNotEmpty)
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {},
+              style: ElevatedButton.styleFrom(
+                backgroundColor: feedbackYellow,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+              child: Text('Track Location',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: navy)),
             ),
-            child: Text('Track Location',
-                style: TextStyle(
-                    
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: navy)),
           ),
-        ),
       ],
     );
   }
@@ -624,7 +739,7 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(width: 8),
         Text(text,
             style: TextStyle(
-                 fontSize: 13, fontWeight: FontWeight.w800, color: navy)),
+                fontSize: 13, fontWeight: FontWeight.w800, color: navy)),
       ],
     );
   }
@@ -633,50 +748,13 @@ class _HomeScreenState extends State<HomeScreen> {
     return _expandableCard(
       icon: Icons.store_mall_directory_outlined,
       title: 'Pick-up & Drop-off Zone',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _zoneRow('Wait Zone', Icons.local_parking_outlined, 'Gate A- Parking Lot'),
-          const SizedBox(height: 14),
-          _zoneRow('Pick Up Zone', Icons.directions_car_outlined, 'Terminal 1 - Block C'),
-          const SizedBox(height: 14),
-          _zoneRow('Drop Off Area', Icons.directions_car_outlined, 'City Centre Mall'),
-        ],
-      ),
-    );
-  }
-
-  Widget _zoneRow(String label, IconData icon, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // ← light blue label
-        Text(label,
-            style: const TextStyle(
-                
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: otpBlue)),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                  shape: BoxShape.circle, border: Border.all(color: const Color(0xFFDADADA))),
-              child: Icon(icon, size: 14, color: navy),
-            ),
-            const SizedBox(width: 8),
-            Text(value,
-                style: TextStyle(
-                    
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: navy)),
-          ],
+      child: const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Text(
+          'No pick-up/drop-off zone data available yet.',
+          style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.black45),
         ),
-      ],
+      ),
     );
   }
 
@@ -707,7 +785,6 @@ class _HomeScreenState extends State<HomeScreen> {
             leading: Icon(icon, color: AppColors.primary, size: 18),
             title: Text(title,
                 style: TextStyle(
-                    
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
                     color: navy,
@@ -738,13 +815,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _actionBtn(String label, Color color, {required VoidCallback onTap}) {
     return SizedBox(
-      height: 44,
+      height: 38,
       child: ElevatedButton(
         onPressed: onTap,
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(19)),
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
         ),
         child: Text(label,
@@ -752,9 +829,8 @@ class _HomeScreenState extends State<HomeScreen> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-                
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
                 color: Colors.white)),
       ),
     );
